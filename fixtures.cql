@@ -3,12 +3,12 @@ CREATE KEYSPACE IF NOT EXISTS lexipets WITH REPLICATION = { 'class' : 'SimpleStr
 
 -- Create a table
 CREATE TABLE IF NOT EXISTS lexipets.species (
-                                                id text PRIMARY KEY,
+                                                id timeuuid PRIMARY KEY,
                                                 name text,
                                                 features list <frozen <map<text, text>>>
 );
 CREATE TABLE IF NOT EXISTS lexipets.pets (
-                                             id text PRIMARY KEY,
+                                             id timeuuid PRIMARY KEY,
                                              name text,
                                              species list <frozen <map<text, text>>>,
                                              genes list <frozen <map<text, text>>>,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS lexipets.pets (
 -- Insert some data
 INSERT INTO lexipets.species
 (id, name, features)
-VALUES ('1', 'Waggler', [{
+VALUES (now(), 'Waggler', [{
         'part': 'ears',
         'dominant': 'pointy',
         'recessive': 'floppy',
@@ -45,7 +45,7 @@ VALUES ('1', 'Waggler', [{
     ]);
 INSERT INTO lexipets.species
 (id, name, features)
-VALUES ('2', 'Gooper', [{
+VALUES (now(), 'Gooper', [{
     'part': 'jelly',
     'dominant': 'firm',
     'recessive': 'fluid',

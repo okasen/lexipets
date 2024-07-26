@@ -27,7 +27,11 @@ func (pet *Pet) img() string {
 	return generatedString
 }
 
-func New(session *gocql.Session, gc *gin.Context) (Pet, error) {
+func New(session *gocql.Session, gc *gin.Context, name string) (Pet, error) {
+	if name == "" {
+		name = "test!"
+	}
+
 	species, err := singleSpecies(session, gc)
 	if err != nil {
 		return Pet{}, err
@@ -41,7 +45,7 @@ func New(session *gocql.Session, gc *gin.Context) (Pet, error) {
 		genes = append(genes, newGene)
 	}
 
-	pet := Pet{Name: "Alex", Species: species, Genes: genes, Img: ""}
+	pet := Pet{Name: name, Species: species, Genes: genes, Img: ""}
 
 	pet.Img = pet.img()
 
