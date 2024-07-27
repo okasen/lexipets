@@ -3,7 +3,7 @@
 import {Suspense, useState} from "react";
 import errorEntry from "next/dist/server/typescript/rules/error";
 
-type Pet = {id: string, name: string, species: {id: string, name: string, features: Array<Map<string, string>>}, genes: {feature: Array<Map<string, string>>, dominant: boolean, recessive: boolean}, img: string};
+type Pet = {id: string, name: string, species_name: string, species_features: Array<Map<string, string>>, genes: {feature: Array<Map<string, string>>, dominant: boolean, recessive: boolean}, img: string};
 
 export function PetComponent() {
 

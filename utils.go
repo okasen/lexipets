@@ -1,10 +1,13 @@
 package main
 
-import "github.com/gocql/gocql"
+import (
+	"github.com/gocql/gocql"
+	"os"
+)
 
 func cassandra() (*gocql.Session, error) {
-	cluster := gocql.NewCluster("127.0.0.1:9042")
-	cluster.Keyspace = "lexipets"
+	cluster := gocql.NewCluster(os.Getenv("CASSANDRA"))
+	cluster.Keyspace = os.Getenv("KEYSPACE")
 
 	session, err := cluster.CreateSession()
 	if err != nil {

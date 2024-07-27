@@ -31,6 +31,16 @@ CREATE TABLE IF NOT EXISTS lexipets.pets (
                                              img text
 );
 
+CREATE TABLE IF NOT EXISTS lexipets.users (
+    id timeuuid PRIMARY KEY,
+                                          username text,
+                                          password text,
+    email text,
+                                          created_at timestamp,
+                                          updated_at timestamp,
+                                          deleted_at timestamp
+);
+
 -- Insert some data
 INSERT INTO lexipets.species
 (id, name, features)
