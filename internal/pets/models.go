@@ -1,28 +1,29 @@
 package pets
 
 type Feature struct {
-	Part      string `json:"part"`
-	Dominant  string `json:"dominant"`
-	Recessive string `json:"recessive"`
-	Mixed     string `json:"mixed"`
+	Part      string `cql:"part" json:"part"`
+	Dominant  string `cql:"dominant" json:"dominant"`
+	Recessive string `cql:"recessive" json:"recessive"`
+	Mixed     string `cql:"mixed" json:"mixed"`
 }
 
 type Species struct {
-	Id       string    `json:"id"`
-	Name     string    `json:"name"`
-	Features []Feature `json:"features"`
+	Id       string    `cql:"id" json:"id"`
+	Name     string    `cql:"name" json:"name"`
+	Features []Feature `cql:"features" json:"feature"`
 }
 
 type Gene struct {
-	Feature   Feature `json:"feature"`
-	Dominant  bool    `json:"dominant"`
-	Recessive bool    `json:"recessive"`
+	Feature   Feature `cql:"feature" json:"feature"`
+	Dominant  bool    `cql:"dominant" json:"dominant"`
+	Recessive bool    `cql:"recessive" json:"recessive"`
 }
 
 type Pet struct {
-	Id      string  `json:"id"`
-	Name    string  `json:"name"`
-	Species Species `json:"species"`
-	Genes   []Gene  `json:"genes"`
-	Img     string  `json:"img"`
+	Id              string    `cql:"id" json:"id"`
+	Name            string    `cql:"name" json:"name"`
+	SpeciesName     string    `cql:"species_name" json:"species_name"`
+	SpeciesFeatures []Feature `cql:"species_features" json:"species_features"`
+	Genes           []Gene    `cql:"genes" json:"genes"`
+	Img             string    `cql:"img" json:"img"`
 }

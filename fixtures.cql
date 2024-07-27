@@ -1,17 +1,33 @@
 -- Create a keyspace
 CREATE KEYSPACE IF NOT EXISTS lexipets WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : '1' };
 
+-- Create types
+CREATE TYPE IF NOT EXISTS lexipets.feature (
+    part text,
+    dominant text,
+    recessive text,
+    mixed text
+                               );
+
+CREATE TYPE IF NOT EXISTS lexipets.gene (
+    dominant boolean,
+    recessive boolean,
+    features list <frozen <feature>>
+                               );
+
 -- Create a table
 CREATE TABLE IF NOT EXISTS lexipets.species (
                                                 id timeuuid PRIMARY KEY,
                                                 name text,
-                                                features list <frozen <map<text, text>>>
+                                                features list <frozen <lexipets.feature>>
 );
+
 CREATE TABLE IF NOT EXISTS lexipets.pets (
                                              id timeuuid PRIMARY KEY,
                                              name text,
-                                             species list <frozen <map<text, text>>>,
-                                             genes list <frozen <map<text, text>>>,
+                                             species_name text,
+                                             species_features list <frozen <lexipets.feature>>,
+                                             genes list <frozen <lexipets.gene>>,
                                              img text
 );
 
@@ -19,54 +35,54 @@ CREATE TABLE IF NOT EXISTS lexipets.pets (
 INSERT INTO lexipets.species
 (id, name, features)
 VALUES (now(), 'Waggler', [{
-        'part': 'ears',
-        'dominant': 'pointy',
-        'recessive': 'floppy',
-        'mixed': 'floppy'
+        part: 'ears',
+        dominant: 'pointy',
+        recessive: 'floppy',
+        mixed: 'floppy'
         },
     {
-        'part': 'coatColor',
-        'dominant': 'brown',
-        'recessive': 'yellow',
-        'mixed': 'brown'
+        part: 'coatColor',
+        dominant: 'brown',
+        recessive: 'yellow',
+        mixed: 'brown'
         },
     {
-        'part': 'tail1',
-        'dominant': 'curled',
-        'recessive': 'straight',
-        'mixed': 'curved'
+        part: 'tail1',
+        dominant: 'curled',
+        recessive: 'straight',
+        mixed: 'curved'
         },
     {
-        'part': 'tail2',
-        'dominant': 'tight',
-        'recessive': 'loose',
-        'mixed': 'relaxed'
+        part: 'tail2',
+        dominant: 'tight',
+        recessive: 'loose',
+        mixed: 'relaxed'
         }
     ]);
 INSERT INTO lexipets.species
 (id, name, features)
 VALUES (now(), 'Gooper', [{
-    'part': 'jelly',
-    'dominant': 'firm',
-    'recessive': 'fluid',
-    'mixed': 'viscous'
+    part: 'jelly',
+    dominant: 'firm',
+    recessive: 'fluid',
+    mixed: 'viscous'
     },
     {
-        'part': 'pattern',
-        'dominant': 'splotches',
-        'recessive': 'plain',
-        'mixed': 'speckles'
+        part: 'pattern',
+        dominant: 'splotches',
+        recessive: 'plain',
+        mixed: 'speckles'
         },
     {
-        'part': 'horn',
-        'dominant': 'present',
-        'recessive': 'missing',
-        'mixed': 'missing'
+        part: 'horn',
+        dominant: 'present',
+        recessive: 'missing',
+        mixed: 'missing'
         },
     {
-        'part': 'hornstyle',
-        'dominant': 'corkscrew',
-        'recessive': 'straight',
-        'mixed': 'ridged'
+        part: 'hornstyle',
+        dominant: 'corkscrew',
+        recessive: 'straight',
+        mixed: 'ridged'
         }
     ]);
