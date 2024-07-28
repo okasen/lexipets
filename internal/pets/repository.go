@@ -57,9 +57,33 @@ func (pet *Pet) persist(session *gocql.Session, ctx *gin.Context) (string, error
 		genes = append(genes, readyGene)
 	}
 
-	err := session.Query(`INSERT INTO lexipets.pets (id, name, species_name, species_features, genes, img) VALUES (?, ?, ?, ?, ?, ?)`, petId, pet.Name, pet.SpeciesName, pet.SpeciesFeatures, genes, pet.Img).WithContext(ctx).Exec()
+	err := session.Query(`INSERT INTO lexipets.pets (owner_id, id, name, species_name, species_features, genes, img) VALUES (?, ?, ?, ?, ?, ?, ?)`, pet.OwnerId, petId, pet.Name, pet.SpeciesName, pet.SpeciesFeatures, genes, pet.Img).WithContext(ctx).Exec()
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("Error inserting into Cassandra: %v", err))
 	}
 	return petId.String(), nil
+}
+
+func scan(session *gocql.Session, ctx *gin.Context, fieldName string, fieldValue string) ([]Pet, error) {
+	var (
+		ownerId         string
+		id              string
+		name            string
+		speciesName     string
+		speciesFeatures []Feature
+		genes           []Gene
+		img             string
+	)
+	statement := fmt.Sprintf(`SELECT owner_id, id, name, species_name, species_features, genes, img FROM lexipets.pets WHERE %v = ? ALLOW FILTERING`, fieldName)
+	scanner := session.Query(statement, fieldValue).Iter().Scanner()
+
+	var List []Pet
+	for scanner.Next() {
+		err := scanner.Scan(&ownerId, &id, &name, &speciesName, &speciesFeatures, &genes, &img)
+		if err != nil {
+			return []Pet{}, errors.New(fmt.Sprintf("Error while fetching pets. Original error: %v", err))
+		}
+		List = append(List, Pet{OwnerId: ownerId, Id: id, Name: name, SpeciesName: speciesName, SpeciesFeatures: speciesFeatures, Genes: genes, Img: img})
+	}
+	return List, nil
 }

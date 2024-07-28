@@ -23,12 +23,14 @@ CREATE TABLE IF NOT EXISTS lexipets.species (
 );
 
 CREATE TABLE IF NOT EXISTS lexipets.pets (
-                                             id timeuuid PRIMARY KEY,
+                                             owner_id timeuuid,
+                                             id timeuuid,
                                              name text,
                                              species_name text,
                                              species_features list <frozen <lexipets.feature>>,
                                              genes list <frozen <lexipets.gene>>,
-                                             img text
+                                             img text,
+                                             PRIMARY KEY(owner_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS lexipets.users (

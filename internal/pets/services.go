@@ -66,3 +66,13 @@ func Save(session *gocql.Session, gc *gin.Context, petJson []byte) (string, erro
 	}
 	return petId, nil
 }
+
+func List(session *gocql.Session, gc *gin.Context, ownerId string) ([]Pet, error) {
+	petList, err := scan(session, gc, "owner_id", ownerId)
+
+	if err != nil || petList == nil {
+		return []Pet{}, err
+	}
+
+	return petList, nil
+}

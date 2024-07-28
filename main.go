@@ -87,6 +87,21 @@ func (session *CassandraSession) login(gc *gin.Context) {
 	gc.IndentedJSON(http.StatusOK, token)
 }
 
+func reauthenticate(gc *gin.Context) {
+	ctxUser, exists := gc.Get("currentUser")
+
+	if !exists {
+		gc.JSON(http.StatusUnauthorized, gin.H{"error": "No user authenticated"})
+	}
+	refreshed, err := users.Refresh(ctxUser.(users.User))
+	if err != nil {
+		gc.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
+	gc.Set("token", refreshed)
+	gc.IndentedJSON(http.StatusOK, refreshed)
+}
+
 func getOwnUser(gc *gin.Context) {
 	user, exists := gc.Get("currentUser")
 	if !exists {
@@ -96,6 +111,80 @@ func getOwnUser(gc *gin.Context) {
 
 	gc.IndentedJSON(http.StatusOK, user)
 }
+
+func Cassandra() (*gocql.Session, error) {
+	session, err := cassandra()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error()))
+	}
+
+	return session, nil
+}
+
+func (session *CassandraSession) generatePet(gc *gin.Context) {
+	var reqJson map[string]string
+	err := gc.BindJSON(&reqJson)
+	if err != nil {
+		gc.JSON(http.StatusInternalServerError, gin.H{"error": "failed to bind request json"})
+		return
+	}
+
+	pet, err := pets.New(session.db, gc, reqJson["name"])
+
+	if err != nil || pet.Name == "" {
+		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to generate pet. Original error: %v", err)})
+		return
+	}
+	gc.IndentedJSON(http.StatusOK, pet)
+}
+
+func (session *CassandraSession) savePet(gc *gin.Context) {
+	owner, exists := gc.Get("currentUser")
+	if !exists {
+		gc.JSON(http.StatusUnauthorized, gin.H{"error": "No authenticated user"})
+		return
+	}
+	ownerId := owner.(users.User).Id
+
+	var pet map[string]interface{}
+	err := gc.BindJSON(&pet)
+
+	pet["owner_id"] = ownerId
+
+	if err != nil {
+		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to bind JSON. Original error: %v. Failing JSON: %v. Failing request context: %v", err, pet, gc)})
+		return
+	}
+
+	petJson, err := json.Marshal(pet)
+
+	petId, err := pets.Save(session.db, gc, petJson)
+
+	if err != nil || petId == "" {
+		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save pet. Original error: %v. Failing JSON: %v", err, pet)})
+		return
+	}
+	gc.IndentedJSON(http.StatusOK, petId)
+}
+
+func (session *CassandraSession) userPets(gc *gin.Context) {
+	owner, exists := gc.Get("currentUser")
+	if !exists {
+		gc.JSON(http.StatusUnauthorized, gin.H{"error": "No authenticated user"})
+		return
+	}
+	ownerId := owner.(users.User).Id
+
+	pets, err := pets.List(session.db, gc, ownerId)
+
+	if err != nil {
+		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to fetch pets. Original error: %v.", err)})
+		return
+	}
+	gc.IndentedJSON(http.StatusOK, pets)
+}
+
+//middleware!
 
 func (session *CassandraSession) checkAuth(gc *gin.Context) {
 	authHeader := gc.GetHeader("Authorization")
@@ -143,53 +232,8 @@ func (session *CassandraSession) checkAuth(gc *gin.Context) {
 	user, err := users.Get("Id", claims["id"].(string), session.db)
 
 	gc.Set("currentUser", user)
-
+	gc.Set("token", token)
 	gc.Next()
-}
-
-func Cassandra() (*gocql.Session, error) {
-	session, err := cassandra()
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error()))
-	}
-
-	return session, nil
-}
-
-func (session *CassandraSession) generatePet(gc *gin.Context) {
-	var reqJson map[string]string
-	err := gc.BindJSON(&reqJson)
-	if err != nil {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": "failed to bind request json"})
-		return
-	}
-
-	pet, err := pets.New(session.db, gc, reqJson["name"])
-
-	if err != nil || pet.Name == "" {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to generate pet. Original error: %v", err)})
-		return
-	}
-	gc.IndentedJSON(http.StatusOK, pet)
-}
-
-func (session *CassandraSession) savePet(gc *gin.Context) {
-	var pet map[string]interface{}
-	err := gc.BindJSON(&pet)
-	if err != nil {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to bind JSON. Original error: %v. Failing JSON: %v. Failing request context: %v", err, pet, gc)})
-		return
-	}
-
-	petJson, err := json.Marshal(pet)
-
-	petId, err := pets.Save(session.db, gc, petJson)
-
-	if err != nil || petId == "" {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save pet. Original error: %v. Failing JSON: %v", err, pet)})
-		return
-	}
-	gc.IndentedJSON(http.StatusOK, petId)
 }
 
 func main() {
@@ -215,10 +259,13 @@ func main() {
 
 	router.POST("/users", cSess.createUser)
 	router.POST("/users/login", cSess.login)
+	router.POST("/reauthenticate", cSess.checkAuth, reauthenticate)
 	router.GET("/users/me", cSess.checkAuth, getOwnUser)
 
-	router.POST("/pets/generate", cSess.generatePet)
-	router.POST("/pets", cSess.savePet)
+	router.POST("/pets/generate", cSess.checkAuth, cSess.generatePet)
+	router.POST("/pets", cSess.checkAuth, cSess.savePet)
+
+	router.GET("/users/me/pets", cSess.checkAuth, cSess.userPets)
 
 	err = router.Run("localhost:8080")
 	if err != nil {

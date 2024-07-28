@@ -62,3 +62,17 @@ func Authenticate(login Login, session *gocql.Session) (User, string, error) {
 
 	return user, token, nil
 }
+
+func Refresh(user User) (string, error) {
+	generate := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  user.Id,
+		"exp": time.Now().Add(time.Hour * 24).Unix(),
+	})
+
+	token, err := generate.SignedString([]byte(os.Getenv("SECRET")))
+
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("Failed to generate new token", err.Error()))
+	}
+	return token, nil
+}

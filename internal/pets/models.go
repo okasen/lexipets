@@ -20,6 +20,7 @@ type Gene struct {
 }
 
 type Pet struct {
+	OwnerId         string    `cql:"owner_id" json:"owner_id"`
 	Id              string    `cql:"id" json:"id"`
 	Name            string    `cql:"name" json:"name"`
 	SpeciesName     string    `cql:"species_name" json:"species_name"`
