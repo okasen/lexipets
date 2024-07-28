@@ -28,6 +28,9 @@ func singleSpecies(session *gocql.Session, ctx *gin.Context) (Species, error) {
 		}
 		allSpecies = append(allSpecies, Species{Id: id, Name: name, Features: flist})
 	}
+	if len(allSpecies) == 0 {
+		return Species{}, errors.New("no species found, is there a db error?")
+	}
 	speciesIndex := rand.Int() % len(allSpecies)
 	species := allSpecies[speciesIndex]
 	return species, nil

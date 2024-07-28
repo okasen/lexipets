@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gocql/gocql"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
@@ -18,14 +20,11 @@ import (
 	"time"
 )
 
-func createUser(gc *gin.Context) {
-	session, err := cassandra()
-	if err != nil {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error())})
-		return
-	}
-	defer session.Close()
+type CassandraSession struct {
+	db *gocql.Session
+}
 
+func (session *CassandraSession) createUser(gc *gin.Context) {
 	var auth users.New
 
 	if err := gc.ShouldBindJSON(&auth); err != nil {
@@ -33,7 +32,7 @@ func createUser(gc *gin.Context) {
 		return
 	}
 
-	userExists, reason, err := users.Exists(auth.Username, auth.Email, session)
+	userExists, reason, err := users.Exists(auth.Username, auth.Email, session.db)
 	if err != nil {
 		gc.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -57,7 +56,7 @@ func createUser(gc *gin.Context) {
 		UpdatedAt: time.Now().UTC(),
 	}
 
-	user, err = users.Create(session, user)
+	user, err = users.Create(session.db, user)
 	if err != nil {
 		gc.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -65,14 +64,7 @@ func createUser(gc *gin.Context) {
 	gc.IndentedJSON(http.StatusOK, user)
 }
 
-func login(gc *gin.Context) {
-	session, err := cassandra()
-	if err != nil {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error())})
-		return
-	}
-	defer session.Close()
-
+func (session *CassandraSession) login(gc *gin.Context) {
 	var login users.Login
 
 	if err := gc.ShouldBindJSON(&login); err != nil {
@@ -80,7 +72,7 @@ func login(gc *gin.Context) {
 		return
 	}
 
-	user, token, err := users.Authenticate(login, session)
+	user, token, err := users.Authenticate(login, session.db)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "Failed to generate token") {
 			gc.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -105,7 +97,7 @@ func getOwnUser(gc *gin.Context) {
 	gc.IndentedJSON(http.StatusOK, user)
 }
 
-func checkAuth(gc *gin.Context) {
+func (session *CassandraSession) checkAuth(gc *gin.Context) {
 	authHeader := gc.GetHeader("Authorization")
 
 	if authHeader == "" {
@@ -148,36 +140,31 @@ func checkAuth(gc *gin.Context) {
 		return
 	}
 
-	session, err := cassandra()
-	if err != nil {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error())})
-		return
-	}
-	defer session.Close()
-
-	user, err := users.Get("Id", claims["id"].(string), session)
+	user, err := users.Get("Id", claims["id"].(string), session.db)
 
 	gc.Set("currentUser", user)
 
 	gc.Next()
 }
 
-func generatePet(gc *gin.Context) {
+func Cassandra() (*gocql.Session, error) {
 	session, err := cassandra()
 	if err != nil {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error())})
-		return
+		return nil, errors.New(fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error()))
 	}
-	defer session.Close()
 
+	return session, nil
+}
+
+func (session *CassandraSession) generatePet(gc *gin.Context) {
 	var reqJson map[string]string
-	err = gc.BindJSON(&reqJson)
+	err := gc.BindJSON(&reqJson)
 	if err != nil {
 		gc.JSON(http.StatusInternalServerError, gin.H{"error": "failed to bind request json"})
 		return
 	}
 
-	pet, err := pets.New(session, gc, reqJson["name"])
+	pet, err := pets.New(session.db, gc, reqJson["name"])
 
 	if err != nil || pet.Name == "" {
 		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to generate pet. Original error: %v", err)})
@@ -186,16 +173,9 @@ func generatePet(gc *gin.Context) {
 	gc.IndentedJSON(http.StatusOK, pet)
 }
 
-func savePet(gc *gin.Context) {
-	session, err := cassandra()
-	if err != nil {
-		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to access Cassandra. Original error: %v", err.Error())})
-		return
-	}
-	defer session.Close()
-
+func (session *CassandraSession) savePet(gc *gin.Context) {
 	var pet map[string]interface{}
-	err = gc.BindJSON(&pet)
+	err := gc.BindJSON(&pet)
 	if err != nil {
 		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to bind JSON. Original error: %v. Failing JSON: %v. Failing request context: %v", err, pet, gc)})
 		return
@@ -203,7 +183,7 @@ func savePet(gc *gin.Context) {
 
 	petJson, err := json.Marshal(pet)
 
-	petId, err := pets.Save(session, gc, petJson)
+	petId, err := pets.Save(session.db, gc, petJson)
 
 	if err != nil || petId == "" {
 		gc.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save pet. Original error: %v. Failing JSON: %v", err, pet)})
@@ -217,6 +197,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %s", err)
 	}
+
+	session, err := Cassandra()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %s", err)
+	}
+	cSess := CassandraSession{db: session}
+
+	defer cSess.db.Close()
+
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"http://localhost:3000", "https://localhost:3000"},
@@ -224,12 +213,12 @@ func main() {
 		AllowHeaders: []string{"Content-Type,access-control-allow-origin, access-control-allow-headers"},
 	}))
 
-	router.POST("/users", createUser)
-	router.POST("/users/login", login)
-	router.GET("/users/me", checkAuth, getOwnUser)
+	router.POST("/users", cSess.createUser)
+	router.POST("/users/login", cSess.login)
+	router.GET("/users/me", cSess.checkAuth, getOwnUser)
 
-	router.POST("/pets/generate", generatePet)
-	router.POST("/pets", savePet)
+	router.POST("/pets/generate", cSess.generatePet)
+	router.POST("/pets", cSess.savePet)
 
 	err = router.Run("localhost:8080")
 	if err != nil {
